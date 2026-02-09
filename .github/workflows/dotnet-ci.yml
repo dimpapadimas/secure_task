@@ -61,3 +61,5 @@ jobs:
         name: dotnet-app
         path: ./publish
         retention-days: 7
+
+        # TODO: Add a SBOM generation step here using a tool like https://github.com/CycloneDX/cyclonedx-dotnet, and upload the SBOM as an artifact for future reference
