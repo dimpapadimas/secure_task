@@ -209,4 +209,4 @@ This project aligns with **Week 1, Challenge 2**:
 
 **You're all set! Start building your DevSecOps pipeline! 🚀**
 
-Run `dotnet run` and visit https://localhost:5001/swagger to see it in action!
+Run `dotnet run` and visit http://localhost:5000/swagger to see it in action!

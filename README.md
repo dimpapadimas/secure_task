@@ -50,8 +50,8 @@ dotnet restore
 cd SecureTaskApi
 dotnet run
 
-# API will be available at: https://localhost:5001
-# Swagger UI: https://localhost:5001/swagger
+# API will be available at: http://localhost:5000
+# Swagger UI: http://localhost:5000/swagger
 ```
 
 ### Run Tests
@@ -81,7 +81,7 @@ dotnet test --collect:"XPlat Code Coverage" --results-directory ./coverage
 
 ```bash
 # Create a new task
-curl -X POST https://localhost:5001/api/tasks \
+curl -X POST http://localhost:5000/api/tasks \
   -H "Content-Type: application/json" \
   -d '{
     "title": "Learn GitHub Actions",

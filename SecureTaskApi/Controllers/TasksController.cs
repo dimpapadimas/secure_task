@@ -51,7 +51,7 @@ public class TasksController : ControllerBase
             Title = createTaskDto.Title,
             Description = createTaskDto.Description,
             Priority = createTaskDto.Priority,
-            Status = TaskStatus.Pending,
+            Status = Models.TaskStatus.Pending,
             CreatedAt = DateTime.UtcNow
         };
 

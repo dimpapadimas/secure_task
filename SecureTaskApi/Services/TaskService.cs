@@ -39,7 +39,7 @@ public class TaskService : ITaskService
     {
         _logger.LogInformation("Updating task: {TaskId}", task.Id);
         
-        if (task.Status == TaskStatus.Completed && task.CompletedAt == null)
+        if (task.Status == Models.TaskStatus.Completed && task.CompletedAt == null)
         {
             task.CompletedAt = DateTime.UtcNow;
         }
@@ -73,10 +73,10 @@ public class TaskService : ITaskService
         var stats = new TaskStatistics
         {
             TotalTasks = tasks.Count,
-            PendingTasks = tasks.Count(t => t.Status == TaskStatus.Pending),
-            InProgressTasks = tasks.Count(t => t.Status == TaskStatus.InProgress),
-            CompletedTasks = tasks.Count(t => t.Status == TaskStatus.Completed),
-            CancelledTasks = tasks.Count(t => t.Status == TaskStatus.Cancelled),
+            PendingTasks = tasks.Count(t => t.Status == Models.TaskStatus.Pending),
+            InProgressTasks = tasks.Count(t => t.Status == Models.TaskStatus.InProgress),
+            CompletedTasks = tasks.Count(t => t.Status == Models.TaskStatus.Completed),
+            CancelledTasks = tasks.Count(t => t.Status == Models.TaskStatus.Cancelled),
             TasksByPriority = tasks.GroupBy(t => t.Priority)
                                   .ToDictionary(g => g.Key, g => g.Count())
         };

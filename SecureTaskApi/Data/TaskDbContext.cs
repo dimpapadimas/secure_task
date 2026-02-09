@@ -31,7 +31,7 @@ public class TaskDbContext : DbContext
                     Title = "Setup development environment",
                     Description = "Install .NET SDK, Visual Studio, and configure Git",
                     Priority = TaskPriority.High,
-                    Status = TaskStatus.Completed,
+                    Status = Models.TaskStatus.Completed,
                     CreatedAt = DateTime.UtcNow.AddDays(-5),
                     CompletedAt = DateTime.UtcNow.AddDays(-4)
                 },
@@ -41,7 +41,7 @@ public class TaskDbContext : DbContext
                     Title = "Implement authentication",
                     Description = "Add JWT-based authentication to the API",
                     Priority = TaskPriority.Critical,
-                    Status = TaskStatus.InProgress,
+                    Status = Models.TaskStatus.InProgress,
                     CreatedAt = DateTime.UtcNow.AddDays(-2)
                 },
                 new TaskItem
@@ -50,7 +50,7 @@ public class TaskDbContext : DbContext
                     Title = "Write unit tests",
                     Description = "Create unit tests for all controllers and services",
                     Priority = TaskPriority.High,
-                    Status = TaskStatus.Pending,
+                    Status = Models.TaskStatus.Pending,
                     CreatedAt = DateTime.UtcNow.AddDays(-1)
                 }
             );

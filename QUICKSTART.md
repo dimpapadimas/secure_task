@@ -13,7 +13,7 @@ dotnet build
 ```bash
 dotnet run
 ```
-Visit: https://localhost:5001/swagger
+Visit: http://localhost:5000/swagger
 
 ### 3. Run Tests
 ```bash
@@ -92,7 +92,7 @@ reportgenerator \
 
 ### Create a Task
 ```bash
-curl -X POST https://localhost:5001/api/tasks \
+curl -X POST http://localhost:5000/api/tasks \
   -H "Content-Type: application/json" \
   -d '{
     "title": "Test GitHub Actions Pipeline",
@@ -103,12 +103,12 @@ curl -X POST https://localhost:5001/api/tasks \
 
 ### Get All Tasks
 ```bash
-curl https://localhost:5001/api/tasks
+curl http://localhost:5000/api/tasks
 ```
 
 ### Get Statistics
 ```bash
-curl https://localhost:5001/api/tasks/statistics
+curl http://localhost:5000/api/tasks/statistics
 ```
 
 ## 📝 Project Stats
@@ -151,7 +151,7 @@ dotnet remove package <PackageName>
 ```bash
 # Change port in Properties/launchSettings.json
 # or use:
-dotnet run --urls "https://localhost:7001"
+dotnet run --urls "http://localhost:7000"
 ```
 
 ### Database Locked
