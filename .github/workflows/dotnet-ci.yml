@@ -1,6 +1,10 @@
 name: .NET CI - Challenge 2
 
 on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
   workflow_dispatch:
 
 env:
@@ -41,6 +45,23 @@ jobs:
     - name: Build
       run: dotnet build --configuration ${{ env.BUILD_CONFIGURATION }} --no-restore
     
+    - name: Install CycloneDX tool
+      run: dotnet tool install --global CycloneDX
+    
+    - name: Generate SBOM for SecureTaskApi
+      run: dotnet CycloneDX SecureTaskApi/SecureTaskApi.csproj -o ./sbom -f json --json-serializer
+    
+    - name: Generate SBOM for SecureTaskApi.Tests
+      run: dotnet CycloneDX SecureTaskApi.Tests/SecureTaskApi.Tests.csproj -o ./sbom -f json --json-serializer
+      continue-on-error: true
+    
+    - name: Upload SBOM Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: sbom-files
+        path: ./sbom/*.json
+        retention-days: 90
+    
     - name: Test
       run: dotnet test --configuration ${{ env.BUILD_CONFIGURATION }} --no-build --verbosity normal --logger trx --collect:"XPlat Code Coverage"
     
@@ -61,5 +82,3 @@ jobs:
         name: dotnet-app
         path: ./publish
         retention-days: 7
-
-        # TODO: Add a SBOM generation step here using a tool like https://github.com/CycloneDX/cyclonedx-dotnet, and upload the SBOM as an artifact for future reference
