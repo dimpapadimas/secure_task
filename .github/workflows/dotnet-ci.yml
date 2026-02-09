@@ -16,13 +16,9 @@ env:
   BUILD_CONFIGURATION: 'Release'
 
 jobs:
-  build-and-test:
-    name: Build and Test
+  build:
+    name: Build
     runs-on: ubuntu-latest
-    
-    permissions:
-      contents: read
-      checks: write
     
     steps:
     - name: Checkout code
@@ -49,40 +45,36 @@ jobs:
     - name: Build
       run: dotnet build --configuration ${{ env.BUILD_CONFIGURATION }} --no-restore
     
-    - name: Install CycloneDX tool
-      run: dotnet tool install --global CycloneDX
-    
-    - name: Generate SBOM for SecureTaskApi
-      run: dotnet-CycloneDX SecureTaskApi/SecureTaskApi.csproj -o ./sbom -F json
-    
-    - name: Generate SBOM for SecureTaskApi.Tests
-      run: dotnet-CycloneDX SecureTaskApi.Tests/SecureTaskApi.Tests.csproj -o ./sbom -F json --filename bom.tests.json
-      continue-on-error: true
-    
-    - name: Scan SBOM with Trivy
-      uses: aquasecurity/trivy-action@master
-      with:
-        scan-type: 'sbom'
-        scan-ref: './sbom/bom.json'
-        format: 'json'
-        output: 'trivy-sbom-results.json'
-        severity: 'HIGH,CRITICAL'
-        exit-code: '0'
-    
-    - name: Upload Trivy SBOM Scan Results
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: trivy-sbom-scan-results
-        path: trivy-sbom-results.json
-        retention-days: 30
-    
-    - name: Upload SBOM Artifacts
+    - name: Upload build output
       uses: actions/upload-artifact@v4
       with:
-        name: sbom-files
-        path: ./sbom/*.json
-        retention-days: 90
+        name: build-output
+        path: |
+          **/bin/Release/net8.0/
+        retention-days: 1
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    needs: build
+    
+    permissions:
+      contents: read
+      checks: write
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+    
+    - name: Download build output
+      uses: actions/download-artifact@v4
+      with:
+        name: build-output
     
     - name: Test
       run: dotnet test --configuration ${{ env.BUILD_CONFIGURATION }} --no-build --verbosity normal --logger trx --collect:"XPlat Code Coverage"
@@ -94,6 +86,151 @@ jobs:
         name: .NET Tests
         path: '**/TestResults/*.trx'
         reporter: dotnet-trx
+    
+    - name: Upload Code Coverage
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: code-coverage
+        path: '**/TestResults/**/coverage.cobertura.xml'
+        retention-days: 30
+
+  sbom-cyclonedx:
+    name: Generate SBOM (CycloneDX)
+    runs-on: ubuntu-latest
+    needs: build
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+    
+    - name: Install CycloneDX tool
+      run: dotnet tool install --global CycloneDX
+    
+    - name: Generate SBOM for SecureTaskApi
+      run: dotnet-CycloneDX SecureTaskApi/SecureTaskApi.csproj -o ./sbom -F json
+    
+    - name: Upload CycloneDX SBOM
+      uses: actions/upload-artifact@v4
+      with:
+        name: sbom-cyclonedx
+        path: ./sbom/bom.json
+        retention-days: 90
+
+  sbom-syft:
+    name: Generate SBOM (Syft)
+    runs-on: ubuntu-latest
+    needs: build
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+    
+    - name: Restore dependencies
+      run: dotnet restore
+    
+    - name: Install Syft
+      run: |
+        curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+    
+    - name: Generate SBOM with Syft
+      run: syft dir:. -o cyclonedx-json=./sbom-syft/bom.json
+    
+    - name: Upload Syft SBOM
+      uses: actions/upload-artifact@v4
+      with:
+        name: sbom-syft
+        path: ./sbom-syft/bom.json
+        retention-days: 90
+
+  scan-cyclonedx:
+    name: Scan SBOM (CycloneDX)
+    runs-on: ubuntu-latest
+    needs: sbom-cyclonedx
+    
+    steps:
+    - name: Download CycloneDX SBOM
+      uses: actions/download-artifact@v4
+      with:
+        name: sbom-cyclonedx
+        path: ./sbom
+    
+    - name: Scan SBOM with Trivy
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'sbom'
+        scan-ref: './sbom/bom.json'
+        format: 'json'
+        output: 'trivy-cyclonedx-results.json'
+        severity: 'HIGH,CRITICAL'
+        exit-code: '0'
+    
+    - name: Upload Trivy CycloneDX Results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: trivy-cyclonedx-results
+        path: trivy-cyclonedx-results.json
+        retention-days: 30
+
+  scan-syft:
+    name: Scan SBOM (Syft)
+    runs-on: ubuntu-latest
+    needs: sbom-syft
+    
+    steps:
+    - name: Download Syft SBOM
+      uses: actions/download-artifact@v4
+      with:
+        name: sbom-syft
+        path: ./sbom-syft
+    
+    - name: Scan SBOM with Trivy
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'sbom'
+        scan-ref: './sbom-syft/bom.json'
+        format: 'json'
+        output: 'trivy-syft-results.json'
+        severity: 'HIGH,CRITICAL'
+        exit-code: '0'
+    
+    - name: Upload Trivy Syft Results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: trivy-syft-results
+        path: trivy-syft-results.json
+        retention-days: 30
+
+  publish:
+    name: Publish
+    runs-on: ubuntu-latest
+    needs: [build, test]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+    
+    - name: Download build output
+      uses: actions/download-artifact@v4
+      with:
+        name: build-output
     
     - name: Publish
       run: dotnet publish SecureTaskApi/SecureTaskApi.csproj -c ${{ env.BUILD_CONFIGURATION }} -o ./publish --no-build
