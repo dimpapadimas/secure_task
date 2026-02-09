@@ -51,6 +51,7 @@ jobs:
         name: build-output
         path: |
           **/bin/Release/net8.0/
+          **/obj/Release/net8.0/
         retention-days: 1
 
   test:
