@@ -1,6 +1,14 @@
 name: .NET CI - Challenge 2
 
 on:
+  push:
+    branches: [ main, develop ]
+    paths-ignore:
+      - '.github/workflows/**'
+  pull_request:
+    branches: [ main ]
+    paths-ignore:
+      - '.github/workflows/**'
   workflow_dispatch:
 
 env:
@@ -45,10 +53,10 @@ jobs:
       run: dotnet tool install --global CycloneDX
     
     - name: Generate SBOM for SecureTaskApi
-      run: dotnet CycloneDX SecureTaskApi/SecureTaskApi.csproj -o ./sbom -f json --json-serializer
+      run: dotnet-CycloneDX SecureTaskApi/SecureTaskApi.csproj -o ./sbom -F json
     
     - name: Generate SBOM for SecureTaskApi.Tests
-      run: dotnet CycloneDX SecureTaskApi.Tests/SecureTaskApi.Tests.csproj -o ./sbom -f json --json-serializer
+      run: dotnet-CycloneDX SecureTaskApi.Tests/SecureTaskApi.Tests.csproj -o ./sbom -F json --filename bom.tests.json
       continue-on-error: true
     
     - name: Upload SBOM Artifacts
