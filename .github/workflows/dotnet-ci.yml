@@ -52,7 +52,7 @@ jobs:
       run: dotnet publish SecureTaskApi/SecureTaskApi.csproj -c ${{ env.BUILD_CONFIGURATION }} -o ./publish --no-build
     
     - name: Upload Build Artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: dotnet-app
         path: ./publish
