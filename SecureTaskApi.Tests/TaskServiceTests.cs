@@ -35,7 +35,7 @@ public class TaskServiceTests : IDisposable
             Id = Guid.NewGuid(),
             Title = "Test Task 1",
             Priority = TaskPriority.High,
-            Status = TaskStatus.Pending,
+            Status = Models.TaskStatus.Pending,
             CreatedAt = DateTime.UtcNow
         };
         var task2 = new TaskItem
@@ -43,7 +43,7 @@ public class TaskServiceTests : IDisposable
             Id = Guid.NewGuid(),
             Title = "Test Task 2",
             Priority = TaskPriority.Low,
-            Status = TaskStatus.Completed,
+            Status = Models.TaskStatus.Completed,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -69,7 +69,7 @@ public class TaskServiceTests : IDisposable
             Id = taskId,
             Title = "Specific Task",
             Priority = TaskPriority.Medium,
-            Status = TaskStatus.InProgress,
+            Status = Models.TaskStatus.InProgress,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -95,7 +95,7 @@ public class TaskServiceTests : IDisposable
             Title = "New Task",
             Description = "Test Description",
             Priority = TaskPriority.Critical,
-            Status = TaskStatus.Pending,
+            Status = Models.TaskStatus.Pending,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -120,7 +120,7 @@ public class TaskServiceTests : IDisposable
             Id = Guid.NewGuid(),
             Title = "Original Title",
             Priority = TaskPriority.Low,
-            Status = TaskStatus.Pending,
+            Status = Models.TaskStatus.Pending,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -128,7 +128,7 @@ public class TaskServiceTests : IDisposable
         await _context.SaveChangesAsync();
 
         task.Title = "Updated Title";
-        task.Status = TaskStatus.Completed;
+        task.Status = Models.TaskStatus.Completed;
 
         // Act
         await _service.UpdateTaskAsync(task);
@@ -137,7 +137,7 @@ public class TaskServiceTests : IDisposable
         var updatedTask = await _context.Tasks.FindAsync(task.Id);
         updatedTask.Should().NotBeNull();
         updatedTask!.Title.Should().Be("Updated Title");
-        updatedTask.Status.Should().Be(TaskStatus.Completed);
+        updatedTask.Status.Should().Be(Models.TaskStatus.Completed);
         updatedTask.CompletedAt.Should().NotBeNull();
     }
 
@@ -150,7 +150,7 @@ public class TaskServiceTests : IDisposable
             Id = Guid.NewGuid(),
             Title = "Task to Delete",
             Priority = TaskPriority.Medium,
-            Status = TaskStatus.Pending,
+            Status = Models.TaskStatus.Pending,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -184,10 +184,10 @@ public class TaskServiceTests : IDisposable
     {
         // Arrange
         await _context.Tasks.AddRangeAsync(
-            new TaskItem { Id = Guid.NewGuid(), Title = "T1", Priority = TaskPriority.High, Status = TaskStatus.Pending, CreatedAt = DateTime.UtcNow },
-            new TaskItem { Id = Guid.NewGuid(), Title = "T2", Priority = TaskPriority.High, Status = TaskStatus.InProgress, CreatedAt = DateTime.UtcNow },
-            new TaskItem { Id = Guid.NewGuid(), Title = "T3", Priority = TaskPriority.Low, Status = TaskStatus.Completed, CreatedAt = DateTime.UtcNow },
-            new TaskItem { Id = Guid.NewGuid(), Title = "T4", Priority = TaskPriority.Medium, Status = TaskStatus.Completed, CreatedAt = DateTime.UtcNow }
+            new TaskItem { Id = Guid.NewGuid(), Title = "T1", Priority = TaskPriority.High, Status = Models.TaskStatus.Pending, CreatedAt = DateTime.UtcNow },
+            new TaskItem { Id = Guid.NewGuid(), Title = "T2", Priority = TaskPriority.High, Status = Models.TaskStatus.InProgress, CreatedAt = DateTime.UtcNow },
+            new TaskItem { Id = Guid.NewGuid(), Title = "T3", Priority = TaskPriority.Low, Status = Models.TaskStatus.Completed, CreatedAt = DateTime.UtcNow },
+            new TaskItem { Id = Guid.NewGuid(), Title = "T4", Priority = TaskPriority.Medium, Status = Models.TaskStatus.Completed, CreatedAt = DateTime.UtcNow }
         );
         await _context.SaveChangesAsync();
 
