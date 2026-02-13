@@ -1,0 +1,167 @@
+name: Reusable Gitleaks Secret Scan
+
+on:
+  workflow_call:
+    inputs:
+      scan-path:
+        description: 'Path to scan (default: entire repository)'
+        required: false
+        type: string
+        default: '.'
+      fail-on-detection:
+        description: 'Whether to fail the workflow if secrets are detected'
+        required: false
+        type: boolean
+        default: true
+      upload-sarif:
+        description: 'Upload results to GitHub Security tab (requires write permissions)'
+        required: false
+        type: boolean
+        default: true
+      gitleaks-version:
+        description: 'Gitleaks version to use'
+        required: false
+        type: string
+        default: 'latest'
+      artifact-retention-days:
+        description: 'Number of days to retain scan results artifact'
+        required: false
+        type: number
+        default: 30
+    outputs:
+      secrets-found:
+        description: 'Whether secrets were detected (true/false)'
+        value: ${{ jobs.gitleaks-scan.outputs.secrets-found }}
+      scan-status:
+        description: 'Overall scan status (success/failure)'
+        value: ${{ jobs.gitleaks-scan.outputs.scan-status }}
+
+jobs:
+  gitleaks-scan:
+    name: 🔐 Gitleaks Secret Scan
+    runs-on: ubuntu-latest
+    
+    outputs:
+      secrets-found: ${{ steps.scan.outputs.secrets-found }}
+      scan-status: ${{ steps.scan.outcome }}
+    
+    permissions:
+      contents: read
+      security-events: write  # Required for SARIF upload
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Full history for comprehensive scan
+    
+    - name: 🔍 Run Gitleaks scan
+      id: scan
+      uses: gitleaks/gitleaks-action@v2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}  # Optional: for Gitleaks Pro features
+      with:
+        args: >
+          detect
+          --source=${{ inputs.scan-path }}
+          --report-path=gitleaks-report.json
+          --report-format=json
+          --redact
+          --verbose
+      continue-on-error: ${{ !inputs.fail-on-detection }}
+    
+    - name: 📊 Generate SARIF report
+      if: always()
+      uses: gitleaks/gitleaks-action@v2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+      with:
+        args: >
+          detect
+          --source=${{ inputs.scan-path }}
+          --report-path=gitleaks-report.sarif
+          --report-format=sarif
+          --redact
+      continue-on-error: true
+    
+    - name: 📤 Upload SARIF to GitHub Security
+      if: always() && inputs.upload-sarif && hashFiles('gitleaks-report.sarif') != ''
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: gitleaks-report.sarif
+        category: gitleaks
+      continue-on-error: true
+    
+    - name: 📦 Upload Gitleaks JSON report
+      if: always() && hashFiles('gitleaks-report.json') != ''
+      uses: actions/upload-artifact@v4
+      with:
+        name: gitleaks-report-json
+        path: gitleaks-report.json
+        retention-days: ${{ inputs.artifact-retention-days }}
+    
+    - name: 📦 Upload Gitleaks SARIF report
+      if: always() && hashFiles('gitleaks-report.sarif') != ''
+      uses: actions/upload-artifact@v4
+      with:
+        name: gitleaks-report-sarif
+        path: gitleaks-report.sarif
+        retention-days: ${{ inputs.artifact-retention-days }}
+    
+    - name: 🚨 Check scan results
+      if: always()
+      run: |
+        if [ -f "gitleaks-report.json" ]; then
+          echo "📋 Gitleaks report generated successfully"
+          
+          # Check if any secrets were found
+          SECRETS_COUNT=$(jq 'length' gitleaks-report.json 2>/dev/null || echo "0")
+          
+          if [ "$SECRETS_COUNT" -gt 0 ]; then
+            echo "⚠️  WARNING: $SECRETS_COUNT potential secret(s) detected!"
+            echo "secrets-found=true" >> $GITHUB_OUTPUT
+            
+            # Display summary (redacted)
+            echo "## 🔐 Gitleaks Secret Scan Results" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Status:** ⚠️ Secrets Detected" >> $GITHUB_STEP_SUMMARY
+            echo "**Count:** $SECRETS_COUNT potential secret(s)" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Details" >> $GITHUB_STEP_SUMMARY
+            echo "Review the uploaded artifacts for full details." >> $GITHUB_STEP_SUMMARY
+            echo "Check the Security tab for SARIF analysis." >> $GITHUB_STEP_SUMMARY
+            
+            if [ "${{ inputs.fail-on-detection }}" = "true" ]; then
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "🚫 **Workflow failed due to secret detection.**" >> $GITHUB_STEP_SUMMARY
+              exit 1
+            fi
+          else
+            echo "✅ No secrets detected!"
+            echo "secrets-found=false" >> $GITHUB_OUTPUT
+            
+            echo "## 🔐 Gitleaks Secret Scan Results" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Status:** ✅ No Secrets Detected" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "The repository scan completed successfully with no secrets found." >> $GITHUB_STEP_SUMMARY
+          fi
+        else
+          echo "❌ Gitleaks report not found - scan may have failed"
+          echo "secrets-found=unknown" >> $GITHUB_OUTPUT
+          
+          echo "## 🔐 Gitleaks Secret Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Status:** ❌ Scan Failed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "No report was generated. Check the scan logs above." >> $GITHUB_STEP_SUMMARY
+        fi
+    
+    - name: 📝 Display scan summary
+      if: always() && hashFiles('gitleaks-report.json') != ''
+      run: |
+        echo "🔍 Gitleaks Scan Summary:"
+        echo "========================"
+        jq -r '.[] | "  • \(.RuleID) in \(.File) (line \(.StartLine))"' gitleaks-report.json 2>/dev/null || echo "No secrets detected or error parsing report"
