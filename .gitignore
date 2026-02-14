@@ -76,3 +76,15 @@ Thumbs.db
 *.user
 *.userosscache
 *.sln.docstates
+
+## Security Scanning
+# NOTE: Config/DatabaseConfig.cs contains INTENTIONAL test secrets for Gitleaks testing
+# See SECURITY_SCANNING.md for details
+gitleaks-report.json
+.gitleaks.toml
+
+## Real secrets (NEVER commit these)
+.env
+.env.local
+secrets.json
+appsettings.Production.json

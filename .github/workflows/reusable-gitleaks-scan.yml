@@ -3,165 +3,140 @@ name: Reusable Gitleaks Secret Scan
 on:
   workflow_call:
     inputs:
-      scan-path:
-        description: 'Path to scan (default: entire repository)'
-        required: false
-        type: string
-        default: '.'
       fail-on-detection:
         description: 'Whether to fail the workflow if secrets are detected'
         required: false
         type: boolean
-        default: true
-      upload-sarif:
-        description: 'Upload results to GitHub Security tab (requires write permissions)'
-        required: false
-        type: boolean
-        default: true
+        default: false
       gitleaks-version:
         description: 'Gitleaks version to use'
         required: false
         type: string
-        default: 'latest'
-      artifact-retention-days:
-        description: 'Number of days to retain scan results artifact'
-        required: false
-        type: number
-        default: 30
-    outputs:
-      secrets-found:
-        description: 'Whether secrets were detected (true/false)'
-        value: ${{ jobs.gitleaks-scan.outputs.secrets-found }}
-      scan-status:
-        description: 'Overall scan status (success/failure)'
-        value: ${{ jobs.gitleaks-scan.outputs.scan-status }}
+        default: '8.21.2'
+    secrets:
+      DEFECTDOJO_TOKEN:
+        required: true
+        description: 'DefectDojo API token for uploading scan results'
 
 jobs:
   gitleaks-scan:
-    name: 🔐 Gitleaks Secret Scan
+    name: 🔐 Secret Scan
     runs-on: ubuntu-latest
-    
-    outputs:
-      secrets-found: ${{ steps.scan.outputs.secrets-found }}
-      scan-status: ${{ steps.scan.outcome }}
-    
-    permissions:
-      contents: read
-      security-events: write  # Required for SARIF upload
     
     steps:
     - name: 📥 Checkout code
       uses: actions/checkout@v4
       with:
-        fetch-depth: 0  # Full history for comprehensive scan
+        fetch-depth: 0
+    
+    - name: 📦 Download Gitleaks
+      run: |
+        echo "⬇️  Downloading Gitleaks v${{ inputs.gitleaks-version }}..."
+        wget -q https://github.com/gitleaks/gitleaks/releases/download/v${{ inputs.gitleaks-version }}/gitleaks_${{ inputs.gitleaks-version }}_linux_x64.tar.gz
+        tar -xzf gitleaks_${{ inputs.gitleaks-version }}_linux_x64.tar.gz
+        chmod +x gitleaks
+        ./gitleaks version
+        echo "✅ Gitleaks downloaded and ready"
     
     - name: 🔍 Run Gitleaks scan
-      id: scan
-      uses: gitleaks/gitleaks-action@v2
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}  # Optional: for Gitleaks Pro features
-      with:
-        args: >
-          detect
-          --source=${{ inputs.scan-path }}
-          --report-path=gitleaks-report.json
-          --report-format=json
-          --redact
-          --verbose
-      continue-on-error: ${{ !inputs.fail-on-detection }}
-    
-    - name: 📊 Generate SARIF report
-      if: always()
-      uses: gitleaks/gitleaks-action@v2
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
-      with:
-        args: >
-          detect
-          --source=${{ inputs.scan-path }}
-          --report-path=gitleaks-report.sarif
-          --report-format=sarif
-          --redact
-      continue-on-error: true
-    
-    - name: 📤 Upload SARIF to GitHub Security
-      if: always() && inputs.upload-sarif && hashFiles('gitleaks-report.sarif') != ''
-      uses: github/codeql-action/upload-sarif@v3
-      with:
-        sarif_file: gitleaks-report.sarif
-        category: gitleaks
-      continue-on-error: true
-    
-    - name: 📦 Upload Gitleaks JSON report
-      if: always() && hashFiles('gitleaks-report.json') != ''
-      uses: actions/upload-artifact@v4
-      with:
-        name: gitleaks-report-json
-        path: gitleaks-report.json
-        retention-days: ${{ inputs.artifact-retention-days }}
-    
-    - name: 📦 Upload Gitleaks SARIF report
-      if: always() && hashFiles('gitleaks-report.sarif') != ''
-      uses: actions/upload-artifact@v4
-      with:
-        name: gitleaks-report-sarif
-        path: gitleaks-report.sarif
-        retention-days: ${{ inputs.artifact-retention-days }}
-    
-    - name: 🚨 Check scan results
-      if: always()
       run: |
+        echo "🔍 Starting secret scan..."
+        ./gitleaks detect \
+          --source=. \
+          --report-path=gitleaks-report.json \
+          --report-format=json \
+          --redact \
+          --verbose \
+          --exit-code=0
+        
         if [ -f "gitleaks-report.json" ]; then
-          echo "📋 Gitleaks report generated successfully"
-          
-          # Check if any secrets were found
-          SECRETS_COUNT=$(jq 'length' gitleaks-report.json 2>/dev/null || echo "0")
-          
-          if [ "$SECRETS_COUNT" -gt 0 ]; then
-            echo "⚠️  WARNING: $SECRETS_COUNT potential secret(s) detected!"
-            echo "secrets-found=true" >> $GITHUB_OUTPUT
-            
-            # Display summary (redacted)
-            echo "## 🔐 Gitleaks Secret Scan Results" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "**Status:** ⚠️ Secrets Detected" >> $GITHUB_STEP_SUMMARY
-            echo "**Count:** $SECRETS_COUNT potential secret(s)" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "### Details" >> $GITHUB_STEP_SUMMARY
-            echo "Review the uploaded artifacts for full details." >> $GITHUB_STEP_SUMMARY
-            echo "Check the Security tab for SARIF analysis." >> $GITHUB_STEP_SUMMARY
-            
-            if [ "${{ inputs.fail-on-detection }}" = "true" ]; then
-              echo "" >> $GITHUB_STEP_SUMMARY
-              echo "🚫 **Workflow failed due to secret detection.**" >> $GITHUB_STEP_SUMMARY
-              exit 1
-            fi
-          else
-            echo "✅ No secrets detected!"
-            echo "secrets-found=false" >> $GITHUB_OUTPUT
-            
-            echo "## 🔐 Gitleaks Secret Scan Results" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "**Status:** ✅ No Secrets Detected" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "The repository scan completed successfully with no secrets found." >> $GITHUB_STEP_SUMMARY
-          fi
+          echo "✅ Scan completed - report generated"
         else
-          echo "❌ Gitleaks report not found - scan may have failed"
-          echo "secrets-found=unknown" >> $GITHUB_OUTPUT
-          
-          echo "## 🔐 Gitleaks Secret Scan Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Status:** ❌ Scan Failed" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "No report was generated. Check the scan logs above." >> $GITHUB_STEP_SUMMARY
+          echo "❌ Scan failed - no report generated"
+          exit 1
         fi
     
-    - name: 📝 Display scan summary
-      if: always() && hashFiles('gitleaks-report.json') != ''
+    - name: 📊 Analyze results
+      id: analyze
       run: |
-        echo "🔍 Gitleaks Scan Summary:"
-        echo "========================"
-        jq -r '.[] | "  • \(.RuleID) in \(.File) (line \(.StartLine))"' gitleaks-report.json 2>/dev/null || echo "No secrets detected or error parsing report"
+        if [ ! -f "gitleaks-report.json" ]; then
+          echo "❌ Report file not found"
+          exit 1
+        fi
+        
+        SECRETS_COUNT=$(jq '. | length' gitleaks-report.json)
+        echo "secrets_found=$SECRETS_COUNT" >> $GITHUB_OUTPUT
+        
+        echo "## 🔐 Gitleaks Secret Scan Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "$SECRETS_COUNT" -gt 0 ]; then
+          echo "⚠️  **Found $SECRETS_COUNT potential secret(s)**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Detected Secrets (Redacted):" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          jq -r '.[] | "[\(.RuleID)] \(.File):\(.StartLine) - \(.Description)"' gitleaks-report.json >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+        else
+          echo "✅ **No secrets detected**" >> $GITHUB_STEP_SUMMARY
+        fi
+    
+    - name: 📤 Upload to DefectDojo
+      if: hashFiles('gitleaks-report.json') != ''
+      env:
+        DEFECTDOJO_TOKEN: ${{ secrets.DEFECTDOJO_TOKEN }}
+        DEFECTDOJO_URL: https://demo.defectdojo.org
+      run: |
+        echo "📤 Uploading scan results to DefectDojo..."
+        
+        # Get engagement ID or create new one
+        PRODUCT_NAME="SecureTaskApi"
+        SCAN_TYPE="Gitleaks Scan"
+        
+        # Upload the scan results
+        RESPONSE=$(curl -X POST "${DEFECTDOJO_URL}/api/v2/import-scan/" \
+          -H "Authorization: Token ${DEFECTDOJO_TOKEN}" \
+          -H "Content-Type: multipart/form-data" \
+          -F "file=@gitleaks-report.json" \
+          -F "scan_type=${SCAN_TYPE}" \
+          -F "product_name=${PRODUCT_NAME}" \
+          -F "engagement_name=GitHub Actions - $(date +%Y-%m-%d)" \
+          -F "auto_create_context=true" \
+          -F "active=true" \
+          -F "verified=false" \
+          -F "close_old_findings=false" \
+          -F "push_to_jira=false" \
+          -F "minimum_severity=Info" \
+          -w "\n%{http_code}" -s)
+        
+        HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+        BODY=$(echo "$RESPONSE" | sed '$d')
+        
+        if [ "$HTTP_CODE" -eq 201 ] || [ "$HTTP_CODE" -eq 200 ]; then
+          echo "✅ Successfully uploaded to DefectDojo"
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### DefectDojo Integration" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status:** ✅ Upload successful" >> $GITHUB_STEP_SUMMARY
+          echo "- **Product:** ${PRODUCT_NAME}" >> $GITHUB_STEP_SUMMARY
+          echo "- **URL:** ${DEFECTDOJO_URL}" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "⚠️  Upload to DefectDojo failed (HTTP ${HTTP_CODE})"
+          echo "Response: $BODY"
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### DefectDojo Integration" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status:** ⚠️  Upload failed (HTTP ${HTTP_CODE})" >> $GITHUB_STEP_SUMMARY
+        fi
+    
+    - name: 📦 Upload artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: gitleaks-report
+        path: gitleaks-report.json
+        retention-days: 90
+    
+    - name: 🚨 Check failure condition
+      if: steps.analyze.outputs.secrets_found > 0 && inputs.fail-on-detection
+      run: |
+        echo "❌ Failing workflow due to detected secrets"
+        exit 1
